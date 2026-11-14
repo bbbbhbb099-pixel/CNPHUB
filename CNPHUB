@@ -1,0 +1,603 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+if PlayerGui:FindFirstChild("SkyBlueHubUI") then
+    PlayerGui.SkyBlueHubUI:Destroy()
+end
+if PlayerGui:FindFirstChild("CNPSpeedGlitchToggleGui") then
+    PlayerGui.CNPSpeedGlitchToggleGui:Destroy()
+end
+if PlayerGui:FindFirstChild("CNPTeleportMenuGui") then
+    PlayerGui.CNPTeleportMenuGui:Destroy()
+end
+
+-- ==========================================
+-- 1. HÀM TẠO NÚT ON/OFF SPEED GLITCH (CHẠY NHANH)
+-- ==========================================
+local isSpeedGlitchActive = false
+local speedToggleGui = nil
+
+local function CreateSpeedToggleBtn()
+    if speedToggleGui then speedToggleGui:Destroy() end
+
+    speedToggleGui = Instance.new("ScreenGui")
+    speedToggleGui.Name = "CNPSpeedGlitchToggleGui"
+    speedToggleGui.ResetOnSpawn = false
+    speedToggleGui.Parent = PlayerGui
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 140, 0, 40)
+    toggleBtn.Position = UDim2.new(0.5, -70, 0.15, 0)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+    toggleBtn.BackgroundTransparency = 0.5
+    toggleBtn.Text = "SPEED: OFF"
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 13
+    toggleBtn.Active = true
+    toggleBtn.Draggable = true
+    toggleBtn.Parent = speedToggleGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = toggleBtn
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(0, 162, 255)
+    stroke.Thickness = 2
+    stroke.Parent = toggleBtn
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        isSpeedGlitchActive = not isSpeedGlitchActive
+        if isSpeedGlitchActive then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 220, 80)
+            toggleBtn.BackgroundTransparency = 0.5
+            toggleBtn.Text = "SPEED: ON"
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+            toggleBtn.BackgroundTransparency = 0.5
+            toggleBtn.Text = "SPEED: OFF"
+        end
+    end)
+end
+
+-- Logic chạy ngầm Speed Glitch
+local SPEED_BOOST = 120
+local camera = workspace.CurrentCamera
+local lastMousePos = camera.CFrame.LookVector
+local isFlicked = false
+
+RunService.RenderStepped:Connect(function(dt)
+    if not isSpeedGlitchActive then return end
+    
+    local char = LocalPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+
+    local moveDir = humanoid.MoveDirection
+    local isMovingBackward = (moveDir.Magnitude > 0 and moveDir:Dot(-rootPart.CFrame.LookVector) > 0.3)
+    local isAirborne = (humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall)
+
+    local currentLook = camera.CFrame.LookVector
+    local delta = (currentLook - lastMousePos).Magnitude
+    lastMousePos = currentLook
+
+    if delta > 0.15 and isMovingBackward and isAirborne then
+        isFlicked = true
+        task.delay(0.25, function()
+            isFlicked = false
+        end)
+    end
+
+    if isFlicked and isMovingBackward then
+        local backwardDir = -rootPart.CFrame.LookVector
+        rootPart.Velocity = Vector3.new(backwardDir.X * SPEED_BOOST, rootPart.Velocity.Y, backwardDir.Z * SPEED_BOOST)
+    end
+end)
+
+-- ==========================================
+-- 2. HÀM VOICE CHAT CỔ ĐIỂN (LƠ LỬNG TRÊN ĐẦU, TỰ ĐỘNG HỒI SINH)
+-- ==========================================
+local isVoiceDecalActive = false
+
+local function EnableOldVoiceChat()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local head = character:WaitForChild("Head", 5)
+    if not head then return end
+
+    if head:FindFirstChild("CNP_VoiceDecal") then
+        head.CNP_VoiceDecal:Destroy()
+    end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "CNP_VoiceDecal"
+    billboard.Size = UDim2.new(0, 32, 0, 32)
+    billboard.StudsOffset = Vector3.new(0, 1.8, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
+
+    local imageLabel = Instance.new("ImageLabel")
+    imageLabel.Size = UDim2.new(1, 0, 1, 0)
+    imageLabel.BackgroundTransparency = 1
+    imageLabel.Image = "rbxassetid://13988543229"
+    imageLabel.Parent = billboard
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1.2)
+    if isVoiceDecalActive then
+        EnableOldVoiceChat()
+    end
+end)
+
+-- ==========================================
+-- 3. HÀM TẠO MENU DỊCH CHUYỂN NGƯỜI CHƠI (TELEPORT MENU)
+-- ==========================================
+local function OpenTeleportMenu()
+    local existing = PlayerGui:FindFirstChild("CNPTeleportMenuGui")
+    if existing then existing:Destroy() end
+
+    local tpGui = Instance.new("ScreenGui")
+    tpGui.Name = "CNPTeleportMenuGui"
+    tpGui.ResetOnSpawn = false
+    tpGui.Parent = PlayerGui
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 260, 0, 320)
+    mainFrame.Position = UDim2.new(0.5, -130, 0.5, -160)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25, 130, 215)
+    mainFrame.BackgroundTransparency = 0.5
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = tpGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 14)
+    corner.Parent = mainFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(115, 205, 255)
+    stroke.Thickness = 2
+    stroke.Parent = mainFrame
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1, 0, 0, 38)
+    topBar.BackgroundTransparency = 1
+    topBar.Parent = mainFrame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -40, 1, 0)
+    title.Position = UDim2.new(0, 12, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "TELEPORT PLAYERS"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topBar
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -34, 0, 4)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 13
+    closeBtn.Parent = topBar
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(1, 0)
+    closeCorner.Parent = closeBtn
+
+    closeBtn.MouseButton1Click:Connect(function()
+        tpGui:Destroy()
+    end)
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -16, 1, -50)
+    scroll.Position = UDim2.new(0, 8, 0, 42)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(115, 205, 255)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.Parent = mainFrame
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 6)
+    listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = scroll
+
+    local function RefreshPlayerList()
+        for _, child in ipairs(scroll:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local pBtn = Instance.new("TextButton")
+                pBtn.Size = UDim2.new(1, -10, 0, 38)
+                pBtn.BackgroundColor3 = Color3.fromRGB(15, 75, 135)
+                pBtn.BackgroundTransparency = 0.4
+                pBtn.Text = "  " .. plr.Name
+                pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                pBtn.Font = Enum.Font.GothamMedium
+                pBtn.TextSize = 13
+                pBtn.TextXAlignment = Enum.TextXAlignment.Left
+                pBtn.Parent = scroll
+
+                local pCorner = Instance.new("UICorner")
+                pCorner.CornerRadius = UDim.new(0, 8)
+                pCorner.Parent = pBtn
+
+                pBtn.MouseButton1Click:Connect(function()
+                    local targetChar = plr.Character
+                    local myChar = LocalPlayer.Character
+                    if targetChar and targetChar:FindFirstChild("HumanoidRootPart") and myChar and myChar:FindFirstChild("HumanoidRootPart") then
+                        myChar.HumanoidRootPart.CFrame = targetChar.HumanoidRootPart.CFrame + Vector3.new(0, 3, 0)
+                        print("Đã dịch chuyển tới: " .. plr.Name)
+                    end
+                end)
+            end
+        end
+    end
+
+    RefreshPlayerList()
+    Players.PlayerAdded:Connect(RefreshPlayerList)
+    Players.PlayerRemoving:Connect(RefreshPlayerList)
+end
+
+-- ==========================================
+-- 4. DANH SÁCH TẤT CẢ KỊCH BẢN TRONG MENU
+-- ==========================================
+local ScriptCategories = {
+    {
+        TabName = "Coil gear",
+        ImageId = "rbxassetid://6023426915",
+        Description = "Script: Click Speed Coil + Gravity Helper",
+        Callback = function()
+            pcall(function()
+                loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Script-em-ServerScriptService-Cl*ic-Speed-Coil-+-Gra-230330"))()
+            end)
+        end
+    },
+    {
+        TabName = "Gold bomb and scope",
+        ImageId = "rbxassetid://6023426915",
+        Description = "Script: Gold bomb script & Custom Scope",
+        Callback = function()
+            pcall(function()
+                loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Gold-bomb-script-223141"))()
+            end)
+        end
+    },
+    {
+        TabName = "COLOR GUN",
+        ImageId = "rbxassetid://6023426915",
+        Description = "Script: Color Gun Tool / Feature",
+        Callback = function()
+            pcall(function()
+                loadstring(game:HttpGet("https://pastebin.com/raw/snp7CahN"))()
+            end)
+        end
+    },
+    {
+        TabName = "Speed Glitch",
+        ImageId = "rbxassetid://6023426915",
+        Description = "Feature: Khởi động nút On/Off xanh đỏ để kích hoạt Speed Glitch bám sàn (Lắc màn hình + Đi lùi + Nhảy).",
+        Callback = function()
+            CreateSpeedToggleBtn()
+            print("Đã bật nút điều khiển Speed Glitch!")
+        end
+    },
+    {
+        TabName = "Old Voice Chat", -- Đã đem trả lại Voice Chat cổ điển cực hot vào đây!
+        ImageId = "rbxassetid://13988543229",
+        Description = "Feature: Kích hoạt Decal Voice Chat lơ lửng sát trên đầu (Tự động duy trì khi nhân vật hồi sinh).",
+        Callback = function()
+            isVoiceDecalActive = true
+            EnableOldVoiceChat()
+            print("Old Voice Chat Activated!")
+        end
+    },
+    {
+        TabName = "Teleport Menu",
+        ImageId = "rbxassetid://6023426915",
+        Description = "Feature: Mở bảng dịch chuyển xuyên không tới thẳng vị trí bất kỳ người chơi nào trong server.",
+        Callback = function()
+            OpenTeleportMenu()
+        end
+    }
+}
+
+-- ==========================================
+-- 5. GIAO DIỆN MENU CHÍNH (SKYBLUE HUB)
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SkyBlueHubUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PlayerGui
+
+local SkyBlueMain = Color3.fromRGB(25, 130, 215)
+local SkyBlueDark = Color3.fromRGB(15, 75, 135)
+local SkyBlueLight = Color3.fromRGB(115, 205, 255)
+local TextWhite = Color3.fromRGB(245, 250, 255)
+local MainTransparency = 0.45
+
+local function StyleFrame(instance, radius, strokeColor, strokeThickness)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius or 12)
+    corner.Parent = instance
+
+    if strokeColor then
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = strokeColor
+        stroke.Thickness = strokeThickness or 1.5
+        stroke.Transparency = 0.25
+        stroke.Parent = instance
+    end
+end
+
+local function MakeDraggable(dragHandle, targetFrame)
+    local dragging, dragInput, dragStart, startPos
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = targetFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            TweenService:Create(targetFrame, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            }):Play()
+        end
+    end)
+end
+
+-- Nút tròn mở Menu CNP
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Name = "ToggleMenuBtn"
+ToggleBtn.Size = UDim2.new(0, 60, 0, 60)
+ToggleBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
+ToggleBtn.BackgroundColor3 = SkyBlueMain
+ToggleBtn.BackgroundTransparency = 0.25
+ToggleBtn.Text = "MENU\nCNP"
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 11
+ToggleBtn.TextColor3 = TextWhite
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.ZIndex = 100
+ToggleBtn.Parent = ScreenGui
+StyleFrame(ToggleBtn, 30, SkyBlueLight, 2)
+MakeDraggable(ToggleBtn, ToggleBtn)
+
+-- Khung Menu chính
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 540, 0, 340)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = SkyBlueMain
+MainFrame.BackgroundTransparency = MainTransparency
+MainFrame.ClipsDescendants = true
+MainFrame.Visible = false
+MainFrame.ZIndex = 50
+MainFrame.Parent = ScreenGui
+StyleFrame(MainFrame, 16, SkyBlueLight, 2)
+
+local MainScale = Instance.new("UIScale")
+MainScale.Scale = 0
+MainScale.Parent = MainFrame
+
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, -16, 0, 42)
+TopBar.Position = UDim2.new(0, 8, 0, 8)
+TopBar.BackgroundColor3 = SkyBlueDark
+TopBar.BackgroundTransparency = 0.4
+TopBar.ZIndex = 51
+TopBar.Parent = MainFrame
+StyleFrame(TopBar, 10, SkyBlueLight, 1)
+MakeDraggable(TopBar, MainFrame)
+
+local HeaderTitle = Instance.new("TextLabel")
+HeaderTitle.Size = UDim2.new(1, -24, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 12, 0, 0)
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Text = "CNP's Features"
+HeaderTitle.Font = Enum.Font.GothamBold
+HeaderTitle.TextSize = 15
+HeaderTitle.TextColor3 = TextWhite
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+HeaderTitle.ZIndex = 52
+HeaderTitle.Parent = TopBar
+
+local LeftTabScroll = Instance.new("ScrollingFrame")
+LeftTabScroll.Size = UDim2.new(0, 165, 1, -66)
+LeftTabScroll.Position = UDim2.new(0, 8, 0, 58)
+LeftTabScroll.BackgroundColor3 = SkyBlueDark
+LeftTabScroll.BackgroundTransparency = 0.45
+LeftTabScroll.BorderSizePixel = 0
+LeftTabScroll.ScrollBarThickness = 4
+LeftTabScroll.ScrollBarImageColor3 = SkyBlueLight
+LeftTabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+LeftTabScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LeftTabScroll.ZIndex = 51
+LeftTabScroll.Parent = MainFrame
+StyleFrame(LeftTabScroll, 12, SkyBlueLight, 1)
+
+local LeftLayout = Instance.new("UIListLayout")
+LeftLayout.Padding = UDim.new(0, 8)
+LeftLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+LeftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+LeftLayout.Parent = LeftTabScroll
+
+local LeftPadding = Instance.new("UIPadding")
+LeftPadding.PaddingTop = UDim.new(0, 10)
+LeftPadding.PaddingBottom = UDim.new(0, 10)
+LeftPadding.Parent = LeftTabScroll
+
+local RightContentFrame = Instance.new("Frame")
+RightContentFrame.Size = UDim2.new(1, -189, 1, -66)
+RightContentFrame.Position = UDim2.new(0, 181, 0, 58)
+RightContentFrame.BackgroundColor3 = SkyBlueDark
+RightContentFrame.BackgroundTransparency = 0.5
+RightContentFrame.ZIndex = 51
+RightContentFrame.Parent = MainFrame
+StyleFrame(RightContentFrame, 12, SkyBlueLight, 1)
+
+local ContentImage = Instance.new("ImageLabel")
+ContentImage.Size = UDim2.new(1, -20, 0, 150)
+ContentImage.Position = UDim2.new(0, 10, 0, 10)
+ContentImage.BackgroundColor3 = Color3.fromRGB(15, 55, 95)
+ContentImage.BackgroundTransparency = 0.3
+ContentImage.ScaleType = Enum.ScaleType.Crop
+ContentImage.ZIndex = 52
+ContentImage.Parent = RightContentFrame
+StyleFrame(ContentImage, 10, SkyBlueLight, 1)
+
+local DescLabel = Instance.new("TextLabel")
+DescLabel.Size = UDim2.new(1, -20, 0, 36)
+DescLabel.Position = UDim2.new(0, 10, 0, 170)
+DescLabel.BackgroundTransparency = 1
+DescLabel.Font = Enum.Font.GothamMedium
+DescLabel.TextSize = 13
+DescLabel.TextColor3 = TextWhite
+DescLabel.TextXAlignment = Enum.TextXAlignment.Left
+DescLabel.TextYAlignment = Enum.TextYAlignment.Top
+DescLabel.TextWrapped = true
+DescLabel.ZIndex = 52
+DescLabel.Parent = RightContentFrame
+
+local ExecuteBtn = Instance.new("TextButton")
+ExecuteBtn.Size = UDim2.new(1, -20, 0, 42)
+ExecuteBtn.Position = UDim2.new(0, 10, 1, -52)
+ExecuteBtn.BackgroundColor3 = SkyBlueMain
+ExecuteBtn.BackgroundTransparency = 0.25
+ExecuteBtn.Text = "▶  EXECUTE SCRIPT"
+ExecuteBtn.Font = Enum.Font.GothamBold
+ExecuteBtn.TextSize = 14
+ExecuteBtn.TextColor3 = TextWhite
+ExecuteBtn.AutoButtonColor = false
+ExecuteBtn.ZIndex = 52
+ExecuteBtn.Parent = RightContentFrame
+StyleFrame(ExecuteBtn, 10, SkyBlueLight, 1)
+
+local TabButtons = {}
+local activeCallback = nil
+
+local function SelectTab(categoryData, selectedBtn)
+    HeaderTitle.Text = "Selected: " .. categoryData.TabName
+    ContentImage.Image = categoryData.ImageId
+    DescLabel.Text = categoryData.Description
+    activeCallback = categoryData.Callback
+
+    for _, btn in ipairs(TabButtons) do
+        TweenService:Create(btn, TweenInfo.new(0.2), {
+            BackgroundColor3 = (btn == selectedBtn) and SkyBlueMain or SkyBlueDark,
+            BackgroundTransparency = (btn == selectedBtn) and 0.25 or 0.55
+        }):Play()
+    end
+end
+
+for index, category in ipairs(ScriptCategories) do
+    local TabBtn = Instance.new("TextButton")
+    TabBtn.Size = UDim2.new(1, -16, 0, 44)
+    TabBtn.BackgroundColor3 = SkyBlueDark
+    TabBtn.BackgroundTransparency = 0.55
+    TabBtn.Text = category.TabName
+    TabBtn.Font = Enum.Font.GothamBold
+    TabBtn.TextSize = 13
+    TabBtn.TextColor3 = TextWhite
+    TabBtn.AutoButtonColor = false
+    TabBtn.ZIndex = 52
+    TabBtn.Parent = LeftTabScroll
+    StyleFrame(TabBtn, 22, SkyBlueLight, 1)
+
+    table.insert(TabButtons, TabBtn)
+
+    TabBtn.MouseButton1Click:Connect(function()
+        SelectTab(category, TabBtn)
+    end)
+
+    if index == 1 then
+        SelectTab(category, TabBtn)
+    end
+end
+
+ExecuteBtn.MouseButton1Click:Connect(function()
+    local flashIn = TweenService:Create(ExecuteBtn, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {
+        BackgroundColor3 = SkyBlueLight,
+        BackgroundTransparency = 0.1,
+        Size = UDim2.new(1, -26, 0, 40)
+    })
+    local flashOut = TweenService:Create(ExecuteBtn, TweenInfo.new(0.25, Enum.EasingStyle.Back), {
+        BackgroundColor3 = SkyBlueMain,
+        BackgroundTransparency = 0.25,
+        Size = UDim2.new(1, -20, 0, 42)
+    })
+
+    flashIn:Play()
+    flashIn.Completed:Connect(function()
+        flashOut:Play()
+    end)
+
+    if activeCallback then
+        task.spawn(activeCallback)
+    end
+end)
+
+local isMenuOpen = false
+local isAnimating = false
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    if isAnimating then return end
+    isAnimating = true
+
+    isMenuOpen = not isMenuOpen
+    if isMenuOpen then
+        MainFrame.Visible = true
+        MainScale.Scale = 0
+        MainFrame.BackgroundTransparency = 1
+        
+        local openScale = TweenService:Create(MainScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+        local openFade = TweenService:Create(MainFrame, TweenInfo.new(0.25), {BackgroundTransparency = MainTransparency})
+        openScale:Play()
+        openFade:Play()
+        openScale.Completed:Connect(function()
+            isAnimating = false
+        end)
+    else
+        local closeScale = TweenService:Create(MainScale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Scale = 0})
+        local closeFade = TweenService:Create(MainFrame, TweenInfo.new(0.2), {BackgroundTransparency = 1})
+        closeScale:Play()
+        closeFade:Play()
+        closeScale.Completed:Connect(function()
+            MainFrame.Visible = false
+            isAnimating = false
+        end)
+    end
+end)
